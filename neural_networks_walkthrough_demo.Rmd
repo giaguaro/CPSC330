@@ -1,0 +1,456 @@
+---
+title: "neural_network_walkthrough"
+author: "Hazem Mslati_10599158"
+date: "4/4/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+#use_python("/usr/bin/python3")
+matplotlib <- import("matplotlib")
+matplotlib$use("Agg", force = TRUE)
+```
+
+# Introduction to Neural Networks (Deep Learning)
+
+## Why Neural Networks?
+
+Neural networks is a state of the art AI model that suirable to solving complex problems in real-life situations. Compared to other ML models, neural networks is an unsupervised model - meaning they do not predict a specific class - because the model learns the relationships between the inputs and the outputs through the iterative process of training. The training phase is nonlinear and complex and therefore it is poised to be generalizable, reveal hidden (latent) information, uncover patterns and predictions, and model highly variable data to predict unexpected outcomes. As such, neural networks is a powerful model to have in your toolbox so let's get right into it with an example!
+
+## 1. Load Data
+
+- First we start with our imports
+
+```{python}
+import pandas as pd 
+import numpy as np
+import seaborn as sns
+
+from keras.models import Sequential ## we will implement our neural networks from the keras lib
+from keras.layers import Dense
+
+import matplotlib.pyplot as plt
+from termcolor import colored
+import statsmodels.api as sm
+from scipy.stats import pearsonr
+#%matplotlib inline
+
+```
+
+- Next we load our dataset
+
+I am going to use the Pima Indians onset of diabetes dataset. You can donwload the dataset from this link: https://www.kaggle.com/datasets/uciml/pima-indians-diabetes-database 
+
+Briefly, this dataset the Pima Indian Diabetes Dataset, it is originally from the National Institute of Diabetes and Digestive and Kidney Diseases. It contains information of 768 women from a population near Phoenix, Arizona, USA. The outcome tested was Diabetes. Therefore, there is one target (dependent) variable and the 8 attributes (TYNECKI, 2018): pregnancies, OGTT(Oral Glucose Tolerance Test), blood pressure, skin thickness, insulin, BMI(Body Mass Index), age, pedigree diabetes function. 
+
+
+```{python}
+
+pima = pd.read_csv('diabetes.csv')
+
+```
+
+## 2. Exploratory data analysis (EDA)
+
+The variables can be summarized as follows:
+
+Input Variables (X):
+
+Number of times pregnant
+Plasma glucose concentration a 2 hours in an oral glucose tolerance test
+Diastolic blood pressure (mm Hg)
+Triceps skin fold thickness (mm)
+2-Hour serum insulin (mu U/ml)
+Body mass index (weight in kg/(height in m)^2)
+Diabetes pedigree function
+Age (years)
+Output Variables (y):
+
+Class variable (0 or 1)
+
+*The shape of the data*
+```{python}
+print(f"Shape of dataset: {colored(pima.shape, 'yellow')}")
+```
+*Preview of the first five rows*
+
+```{python}
+pima.head()
+```
+
+*Renaming DiabetesPedigreeFunction to DPF for better consistency*
+
+```{python}
+pima = pima.rename(columns = {'DiabetesPedigreeFunction':'DPF'})
+```
+
+*Checking the number of unique values in each column*
+
+```{python}
+dict = {}
+for i in list(pima.columns):
+    dict[i] = pima[i].value_counts().shape[0]
+
+pd.DataFrame(dict,index=["unique count"]).transpose()
+```
+
+*Separating into features and possible target class*
+
+```{python}
+con_cols = list(pima.drop('Outcome',axis=1).columns)
+target = ['Outcome']
+print(f"The columns are : {colored(con_cols, 'yellow')}")
+print(f"The target is   : {colored(target,'yellow')}")
+```
+*Summary statistics*
+
+```{python}
+pima[con_cols].describe().transpose()
+```
+
+*Count of target variable*
+
+```{python}
+fig = plt.figure(figsize=(25,7))
+gs = fig.add_gridspec(1,2)
+gs.update(wspace=0.3, hspace=0.15)
+ax0 = fig.add_subplot(gs[0,0])
+ax1 = fig.add_subplot(gs[0,1])
+
+# Title of the plot
+ax0.text(0.5,0.5,"Count of the target\n___________",
+        horizontalalignment = 'center',
+        verticalalignment = 'center',
+        fontsize = 18,
+        fontweight='bold',
+        fontfamily='serif',
+        color='#000000')
+
+ax0.set_xticklabels([])
+ax0.set_yticklabels([])
+ax0.tick_params(left=False, bottom=False)
+# Target Count
+ax1.text(0.45,510,"Output",fontsize=14, fontweight='bold', fontfamily='serif', color="#000000")
+ax1.grid(color='#000000', linestyle=':', axis='y', zorder=0,  dashes=(1,5))
+sns.countplot(ax=ax1, data=pima, x = 'Outcome')
+ax1.set_xlabel("")
+ax1.set_ylabel("")
+ax1.set_xticklabels(["Low chances of diabetes(0)","High chances of diabetes(1)"])
+
+ax0.spines["top"].set_visible(False)
+ax0.spines["left"].set_visible(False)
+ax0.spines["bottom"].set_visible(False)
+ax0.spines["right"].set_visible(False)
+ax1.spines["top"].set_visible(False)
+ax1.spines["left"].set_visible(False)
+ax1.spines["right"].set_visible(False)
+
+plt.show()
+```
+
+- we observe class imbalance from this bar plot.
+
+
+*Histogram of features*
+
+```{python}
+fig = plt.figure(figsize=(18,15))
+gs = fig.add_gridspec(3,3)
+gs.update(wspace=0.5, hspace=0.25)
+ax0 = fig.add_subplot(gs[0,0])
+ax1 = fig.add_subplot(gs[0,1])
+ax2 = fig.add_subplot(gs[0,2])
+ax3 = fig.add_subplot(gs[1,0])
+ax4 = fig.add_subplot(gs[1,1])
+ax5 = fig.add_subplot(gs[1,2])
+ax6 = fig.add_subplot(gs[2,0])
+ax7 = fig.add_subplot(gs[2,1])
+ax8 = fig.add_subplot(gs[2,2])
+
+
+# Title of the plot
+ax0.spines["bottom"].set_visible(False)
+ax0.spines["left"].set_visible(False)
+ax0.spines["top"].set_visible(False)
+ax0.spines["right"].set_visible(False)
+ax0.tick_params(left=False, bottom=False)
+ax0.set_xticklabels([])
+ax0.set_yticklabels([])
+ax0.text(0.5,0.5,
+         'Histogram for various\n features\n_________________',
+         horizontalalignment='center',
+         verticalalignment='center',
+         fontsize=18, fontweight='bold',
+         fontfamily='serif',
+         color="#000000")
+
+# Pregnancies 
+ax1.text(4, 260, 'Pregnancies', fontsize=14, fontweight='bold', fontfamily='serif', color="#000000")
+ax1.grid(color='#000000', linestyle=':', axis='y', zorder=0,  dashes=(1,5))
+sns.histplot(ax=ax1,x=pima['Pregnancies'],color="#f56476",kde=True)
+ax1.set_xlabel("")
+ax1.set_ylabel("")
+
+# Glucose 
+ax2.text(55, 105, 'Glucose', fontsize=14, fontweight='bold', fontfamily='serif', color="#000000")
+ax2.grid(color='#000000', linestyle=':', axis='y', zorder=0,  dashes=(1,5))
+sns.histplot(ax=ax2,x=pima['Glucose'],color="#ff8811",kde=True)
+ax2.set_xlabel("")
+ax2.set_ylabel("")
+
+# BloodPressure 
+ax3.text(35, 115, 'BloodPressure', fontsize=14, fontweight='bold', fontfamily='serif', color="#000000")
+ax3.grid(color='#000000', linestyle=':', axis='y', zorder=0,  dashes=(1,5))
+sns.histplot(ax=ax3,x=pima['BloodPressure'],color="#ff0040",kde=True)
+ax3.set_xlabel("")
+ax3.set_ylabel("")
+
+# SkinThickness 
+ax4.text(25, 250, 'SkinThickness', fontsize=14, fontweight='bold', fontfamily='serif', color="#000000")
+ax4.grid(color='#000000', linestyle=':', axis='y', zorder=0,  dashes=(1,5))
+sns.histplot(ax=ax4,x=pima['SkinThickness'],color="#ff7f6c",kde=True)
+ax4.set_xlabel("")
+ax4.set_ylabel("")
+
+# Insulin 
+ax5.text(250, 430, 'Insulin', fontsize=14, fontweight='bold', fontfamily='serif', color="#000000")
+ax5.grid(color='#000000', linestyle=':', axis='y', zorder=0,  dashes=(1,5))
+sns.histplot(ax=ax5,x=pima['Insulin'],color="#f0f66e",kde=True)
+ax5.set_xlabel("")
+ax5.set_ylabel("")
+
+# BMI 
+ax6.text(25, 100, 'BMI', fontsize=14, fontweight='bold', fontfamily='serif', color="#000000")
+ax6.grid(color='#000000', linestyle=':', axis='y', zorder=0,  dashes=(1,5))
+sns.histplot(ax=ax6,x=pima['BMI'],palette=["#990000"],kde=True)
+ax6.set_xlabel("")
+ax6.set_ylabel("")
+
+# DPF 
+ax7.text(1, 150, 'DPF', fontsize=14, fontweight='bold', fontfamily='serif', color="#000000")
+ax7.grid(color='#000000', linestyle=':', axis='y', zorder=0,  dashes=(1,5))
+sns.histplot(ax=ax7,x=pima['DPF'],color="#3339FF",kde=True)
+ax7.set_xlabel("")
+ax7.set_ylabel("")
+
+# Age 
+ax8.text(40, 230, 'Age', fontsize=14, fontweight='bold', fontfamily='serif', color="#000000")
+ax8.grid(color='#000000', linestyle=':', axis='y', zorder=0,  dashes=(1,5))
+sns.histplot(ax=ax8,x=pima['Age'],color="#34495E",kde=True)
+ax8.set_xlabel("")
+ax8.set_ylabel("")
+
+
+for s in ["top","right","left"]:
+    ax1.spines[s].set_visible(False)
+    ax2.spines[s].set_visible(False)
+    ax3.spines[s].set_visible(False)
+    ax4.spines[s].set_visible(False)
+    ax5.spines[s].set_visible(False)
+    ax6.spines[s].set_visible(False)
+    ax7.spines[s].set_visible(False)
+    ax8.spines[s].set_visible(False)
+plt.show()
+```
+
+- from here we observe that there are normal distribution for some variables but there are variable like BMI have "0" as a value? This cannot be true. We need to deal with this.
+
+*Lets see if we have any missing values*
+
+```{python}
+pima.isnull().sum()
+```
+
+- Nope. But we need to deal with the aberrant zero values nonetheless.
+
+*Checking other zero values*
+
+```{python}
+features = pima.columns
+cols = (pima[features] == 0).sum()
+print(cols)
+```
+- It is observed that pregnancies, Glucose, BloodPressure, SkinThickness, Insulin, BMI has 0 value, which cannot be in real life. 
+- Therefore, there is incorrect information given. We have two choices now. One is to drop such observations (which results in loss of data) or we can replace such values with median (imputing). I prefer imputing as we have a small dataset (768 observation only). Hence, every information is important.
+- We can simply replace the zero values by median.
+
+- Lets see a violin plot to get a sense of some of the variables. 
+
+*Violin plot of one of the variable that incorrectly reports zero*
+
+```{python}
+
+sns.violinplot(x='Outcome', y='BloodPressure', data=pima, palette='muted', split=True)
+plt.show()
+```
+
+- As we can see from the tails of the violin plot, there is a bunch of zeros but the boxplot reveal good mean distribution. So our choice of imputation with mean is good. 
+
+
+`Checking for multi collinearity`
+
+The correlation matrix below uses Pearson’s correlation coefficient to illustrate the relationship between variables. From the figure, a significant correlation can be observed between Pregnancies and Age. To further confirm, we calculate the correlation coefficient.
+
+*Making correlation matrix*
+```{python}
+
+pima_corr = pima.corr().transpose()
+pima_corr
+
+```
+*Plotting correlation*
+
+```{python}
+fig = plt.figure(figsize=(10,10))
+gs = fig.add_gridspec(1,1)
+gs.update(wspace=0.3, hspace=0.15)
+ax0 = fig.add_subplot(gs[0,0])
+
+df_corr = pima[con_cols].corr().transpose()
+mask = np.triu(np.ones_like(pima_corr))
+ax0.text(2,-0.1,"Correlation Matrix",fontsize=22, fontweight='bold', fontfamily='serif', color="#000000")
+sns.heatmap(pima_corr,mask=mask,fmt=".1f",annot=True)
+plt.show()
+```
+
+```{python}
+corr, _ = pearsonr(pima['Age'], pima['Pregnancies'])
+print('Pearsons correlation between Age and Pregnancies: %.3f' % corr)
+```
+
+## 3) Fixing our data
+
+- As we remarked, wwe have identified some missing values. We have also spotted skews and some outliers but we wont deal with the latter in this excercise.
+
+
+*Imputing our missing data*
+
+```{python}
+pima['Glucose'].fillna(pima['Glucose'].median(), inplace =True)
+pima['BloodPressure'].fillna(pima['BloodPressure'].median(), inplace =True)
+pima['BMI'].fillna(pima['BMI'].median(), inplace =True)
+
+# impute Insulin values based on Glucose
+by_Glucose_Age_Insulin_Grp = pima.groupby(['Glucose'])
+def fill_Insulin(series):
+    return series.fillna(series.median())
+pima['Insulin'] = by_Glucose_Age_Insulin_Grp['Insulin'].transform(fill_Insulin)
+
+pima['Insulin'] = pima['Insulin'].fillna(pima['Insulin'].mean())
+
+by_BMI_Insulin = pima.groupby(['BMI'])
+def fill_Skinthickness(series):
+    return series.fillna(series.mean())
+pima['SkinThickness'] = by_BMI_Insulin['SkinThickness'].transform(fill_Skinthickness)
+
+pima['SkinThickness'].fillna(pima['SkinThickness'].mean(),inplace= True)
+
+
+pima.isnull().sum()
+```
+
+## 4) Define Keras model
+
+
+- We have to create a sequential model and add layers one at a time until we are content with our neural network architecture. 
+
+- How do we know the number of layers optimal for our problem? It is hard to know a priori as this can be heuristic tools that could address this dilemma. Generally speaking, we just need a big network to capture the structure of the problem.
+
+- So the first thing is to get our input layer with the correct features and the right number thereof. 
+
+- We have 8 variable and therefore we will need the input layer - input_dim - to be 8x8 in dim for starters. 
+
+- We will then build two more layers on top of that (three-layered connected network). Connection of layers is implemented using the ***Dense class***.
+
+- An activation function is required to be specified for each layer. An Activation Function decides whether the neuron's input to the network is important or not in the process of prediction using a preferred algorithm.
+
+- Here we will use ReLU for the first two layers and Sigmoid for the last layer for easier interpretation since Sigmoid will output in the range between 0 and 1.
+
+```{python}
+
+# define the keras model
+model = Sequential()
+model.add(Dense(12, input_dim=8, activation='relu'))
+model.add(Dense(8, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+
+```
+## 5) Compiling our Keras model
+
+
+- Compiling here means that we need to represent our data as efficiently as possible. TensorFlow provides such efficient numerical libraries. This step also enables autamtic detection of the best hardware settings that will be relevant for the training phase.
+
+- Some defining features that sets the neural network apart from other models is the use of ***loss function*** which is used to assess the quality of the training judged from the weights (or importance) assigned to each variable. The less **loss** the better, essentialy. 
+
+- The training phases are called herein "Epochs" and can be defined by the user.
+
+- Anyways, we will use the *"binary_crossentropy"* as our loss function. 
+
+- Then, we need to define the optimizer - which means how we are going to minimize the loss function to go to as near zero as non-humanly possible. We shall choose "Adam" which is a **gradient descent** algorithm. This is a popular version of gradient descent because it automatically tunes itself and gives good results in a wide range of problems. 
+
+- Finally, we got to define the scoring metrics since we actually have a classificiation problem here. 
+
+```{python}
+# compile the keras model
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+```
+
+## 6) Fit the Keras model
+
+
+Time to fit our model!
+
+- But before that, one last definition. *Batch* here refers to the number of samples to be passed to each *Epoch* before weights are updated.
+
+- Also we need to readapt our data to a numpy matrix.
+
+```{python}
+dataset=pima.to_numpy()
+X = dataset[:,0:8]
+y = dataset[:,8]
+
+```
+
+*Fitting our model*
+
+```{python}
+# fit the keras model on the dataset
+model.fit(X, y, epochs=150, batch_size=10, verbose=0)
+```
+
+## 7) Evaluating our model
+
+Remember how we said this is a classification problem and that we need a metric for assessment. Well, here it is..
+
+```{python}
+# evaluate the keras model
+_, accuracy = model.evaluate(X, y)
+print('Accuracy: %.2f' % (accuracy*100))
+```
+
+## 8) Making predictions 
+
+Of course we did not do all this work only for the fun of it. We can use it to predict labels given the same row dimension of variables.
+
+
+- We use the predict() function to make predictions ..
+
+```{python}
+...
+# make probability predictions with the model
+predictions = model.predict(X)
+# round predictions 
+rounded = [round(x[0]) for x in predictions]
+```
+We can see that most rows are correctly predicted. In fact, we would expect about 79.17% of the rows to be correctly predicted based on our estimated performance of the model in the previous section.
+
+```{python}
+#[6.0, 148.0, 72.0, 35.0, 0.0, 33.6, 0.627, 50.0] => 0 (expected 1)
+#[1.0, 85.0, 66.0, 29.0, 0.0, 26.6, 0.351, 31.0] => 0 (expected 0)
+#[8.0, 183.0, 64.0, 0.0, 0.0, 23.3, 0.672, 32.0] => 1 (expected 1)
+#[1.0, 89.0, 66.0, 23.0, 94.0, 28.1, 0.167, 21.0] => 0 (expected 0)
+#[0.0, 137.0, 40.0, 35.0, 168.0, 43.1, 2.288, 33.0] => 1 (expected 1)
+```
+
